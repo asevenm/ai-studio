@@ -1,17 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ImageSetCard from '@/components/image-set/ImageSetCard';
 import CreateImageSetDialog from '@/components/image-set/CreateImageSetDialog';
 import { useSession } from 'next-auth/react';
+import { useImageSetStream } from '@/lib/useImageSetStream';
 
 
 interface ImageSet {
   id: string;
   name: string;
   configType: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
   createdAt: string;
   images: { id: string; url: string; thumbnail?: string }[];
 }
@@ -22,24 +24,49 @@ export default function HistoryPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const { data: session, update: updateSession } = useSession();
 
+  // Check if there are any processing items
+  const hasProcessing = imageSets.some(set => set.status === 'processing');
 
-  useEffect(() => {
-    fetchImageSets();
-  }, []);
-
-  const fetchImageSets = async () => {
+  const fetchImageSets = useCallback(async () => {
     try {
       const res = await fetch('/api/image-sets');
       if (res.ok) {
         const data = await res.json();
         setImageSets(data);
+        return data;
       }
     } catch (error) {
       console.error('Failed to fetch image sets:', error);
     } finally {
       setLoading(false);
     }
-  };
+    return [];
+  }, []);
+
+  // Use SSE for real-time updates when there are processing items
+  useImageSetStream({
+    enabled: hasProcessing,
+    onUpdate: (updatedSets) => {
+      // Merge updated items into current list
+      setImageSets(prev => {
+        const updated = [...prev];
+        for (const newSet of updatedSets) {
+          const index = updated.findIndex(s => s.id === newSet.id);
+          if (index >= 0) {
+            updated[index] = newSet;
+          }
+        }
+        return updated;
+      });
+    },
+    onAllCompleted: () => {
+      console.log('All image sets completed!');
+    },
+  });
+
+  useEffect(() => {
+    fetchImageSets();
+  }, [fetchImageSets]);
 
   const handleCreateImageSet = async (data: {
     configType: string;
@@ -156,6 +183,7 @@ export default function HistoryPage() {
               id={imageSet.id}
               name={imageSet.name}
               configType={imageSet.configType}
+              status={imageSet.status}
               createdAt={imageSet.createdAt}
               images={imageSet.images}
               onDownload={() => handleDownload(imageSet.id)}
