@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { Plus } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Plus, Search, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import ImageSetCard from '@/components/image-set/ImageSetCard';
 import CreateImageSetDialog from '@/components/image-set/CreateImageSetDialog';
 import { useSession } from 'next-auth/react';
@@ -18,27 +19,61 @@ interface ImageSet {
   images: { id: string; url: string; thumbnail?: string }[];
 }
 
+interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasMore: boolean;
+}
+
 export default function HistoryPage() {
   const [imageSets, setImageSets] = useState<ImageSet[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [keyword, setKeyword] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [pagination, setPagination] = useState<Pagination | null>(null);
   const { data: session, update: updateSession } = useSession();
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Check if there are any processing items
   const hasProcessing = imageSets.some(set => set.status === 'processing');
 
-  const fetchImageSets = useCallback(async () => {
+  const fetchImageSets = useCallback(async (page: number = 1, searchKeyword: string = '', append: boolean = false) => {
     try {
-      const res = await fetch('/api/image-sets');
+      if (page === 1) {
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
+
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: '10',
+      });
+      if (searchKeyword) {
+        params.set('keyword', searchKeyword);
+      }
+
+      const res = await fetch(`/api/image-sets?${params}`);
       if (res.ok) {
-        const data = await res.json();
-        setImageSets(data);
-        return data;
+        const result = await res.json();
+        if (append) {
+          setImageSets(prev => [...prev, ...result.data]);
+        } else {
+          setImageSets(result.data);
+        }
+        setPagination(result.pagination);
+        return result.data;
       }
     } catch (error) {
       console.error('Failed to fetch image sets:', error);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
     return [];
   }, []);
@@ -64,9 +99,45 @@ export default function HistoryPage() {
     },
   });
 
+  // Initial fetch
   useEffect(() => {
-    fetchImageSets();
-  }, [fetchImageSets]);
+    fetchImageSets(1, keyword);
+  }, [fetchImageSets, keyword]);
+
+  // Debounced search
+  const handleSearchChange = (value: string) => {
+    setSearchInput(value);
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    searchTimeoutRef.current = setTimeout(() => {
+      setKeyword(value);
+    }, 300);
+  };
+
+  // Infinite scroll with Intersection Observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const first = entries[0];
+        if (first.isIntersecting && pagination?.hasMore && !loadingMore && !loading) {
+          fetchImageSets(pagination.page + 1, keyword, true);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    const currentRef = loadMoreRef.current;
+    if (currentRef) {
+      observer.observe(currentRef);
+    }
+
+    return () => {
+      if (currentRef) {
+        observer.unobserve(currentRef);
+      }
+    };
+  }, [pagination, loadingMore, loading, fetchImageSets, keyword]);
 
   const handleCreateImageSet = async (data: {
     configType: string;
@@ -129,12 +200,12 @@ export default function HistoryPage() {
         }
       });
 
-      // 4. 刷新列表
-      await fetchImageSets();
+      // 4. 刷新列表（重置到第一页）
+      await fetchImageSets(1, keyword);
       setDialogOpen(false);
     } catch (error: any) {
       console.error('Create image set error:', error);
-      alert(error.message || '操作失败，请重is试');
+      alert(error.message || '操作失败，请重试');
     }
   };
 
@@ -147,15 +218,27 @@ export default function HistoryPage() {
   return (
     <div className="max-w-6xl mx-auto px-6 py-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">生成历史</h1>
-        <Button
-          className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
-          onClick={() => setDialogOpen(true)}
-        >
-          <Plus className="w-4 h-4" />
-          新建套图
-        </Button>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Input
+              type="text"
+              placeholder="搜索套图名称..."
+              value={searchInput}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="pl-10 w-64"
+            />
+          </div>
+          <Button
+            className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
+            onClick={() => setDialogOpen(true)}
+          >
+            <Plus className="w-4 h-4" />
+            新建套图
+          </Button>
+        </div>
       </div>
 
       {/* Content */}
@@ -165,15 +248,17 @@ export default function HistoryPage() {
         </div>
       ) : imageSets.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64 text-gray-500">
-          <p className="mb-4">暂无生成历史</p>
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => setDialogOpen(true)}
-          >
-            <Plus className="w-4 h-4" />
-            创建第一个套图
-          </Button>
+          <p className="mb-4">{keyword ? '没有找到匹配的套图' : '暂无生成历史'}</p>
+          {!keyword && (
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => setDialogOpen(true)}
+            >
+              <Plus className="w-4 h-4" />
+              创建第一个套图
+            </Button>
+          )}
         </div>
       ) : (
         <div className="space-y-4">
@@ -189,6 +274,19 @@ export default function HistoryPage() {
               onDownload={() => handleDownload(imageSet.id)}
             />
           ))}
+
+          {/* Load more trigger */}
+          <div ref={loadMoreRef} className="h-10 flex items-center justify-center">
+            {loadingMore && (
+              <div className="flex items-center gap-2 text-gray-500">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>加载更多...</span>
+              </div>
+            )}
+            {pagination && !pagination.hasMore && imageSets.length > 0 && (
+              <div className="text-gray-400 text-sm">已加载全部</div>
+            )}
+          </div>
         </div>
       )}
 

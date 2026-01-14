@@ -27,7 +27,7 @@ const FloatingActions = dynamic(
 export default function EditorPage() {
   const params = useParams();
   const designId = params.designId as string;
-  const { layers, setLayers, setPlatform, setProjectInfo, addLayer, saveHistory } =
+  const { layers, setLayers, setPlatform, setProjectInfo, setImageSet } =
     useStore();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -48,6 +48,9 @@ export default function EditorPage() {
           if (data.folder?.project) {
             setProjectInfo(data.folder.project);
           }
+          if (data.imageSet) {
+            setImageSet(data.imageSet);
+          }
         }
       } catch (err) {
         console.error('Failed to fetch design:', err);
@@ -56,7 +59,7 @@ export default function EditorPage() {
       }
     }
     if (designId) fetchDesign();
-  }, [designId, setLayers, setPlatform, setProjectInfo]);
+  }, [designId, setLayers, setPlatform, setProjectInfo, setImageSet]);
 
   // Auto-save logic
   const debouncedSave = useCallback(

@@ -21,6 +21,12 @@ export async function GET(
           include: {
             project: true
           }
+        },
+        imageSet: {
+          include: {
+            images: true,
+            sourceImages: true
+          }
         }
       }
     });

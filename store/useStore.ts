@@ -18,6 +18,28 @@ export interface Layer {
   zIndex: number;
 }
 
+export interface GeneratedImage {
+  id: string;
+  url: string;
+  thumbnail?: string | null;
+  platform?: string | null;
+}
+
+export interface SourceImage {
+  id: string;
+  url: string;
+  viewType: string;
+}
+
+export interface ImageSet {
+  id: string;
+  name: string;
+  configType: string;
+  status: string;
+  images: GeneratedImage[];
+  sourceImages: SourceImage[];
+}
+
 interface State {
   layers: Layer[];
   selectedId: string | null;
@@ -27,6 +49,7 @@ interface State {
   activeTool: 'select' | 'hand' | 'text' | 'shape';
   platform: string | null;
   projectInfo: any | null;
+  imageSet: ImageSet | null;
 }
 
 interface Actions {
@@ -41,6 +64,8 @@ interface Actions {
   setActiveTool: (tool: 'select' | 'hand' | 'text' | 'shape') => void;
   setPlatform: (platform: string | null) => void;
   setProjectInfo: (info: any) => void;
+  setImageSet: (imageSet: ImageSet | null) => void;
+  addImageToCanvas: (image: GeneratedImage) => void;
 }
 
 export const useStore = create<State & Actions>()(
@@ -53,6 +78,7 @@ export const useStore = create<State & Actions>()(
     activeTool: 'select',
     platform: null,
     projectInfo: null,
+    imageSet: null,
 
     setProjectInfo: (info) =>
       set((state) => {
@@ -120,6 +146,33 @@ export const useStore = create<State & Actions>()(
     setPlatform: (platform) =>
       set((state) => {
         state.platform = platform;
+      }),
+
+    setImageSet: (imageSet) =>
+      set((state) => {
+        state.imageSet = imageSet;
+      }),
+
+    addImageToCanvas: (image) =>
+      set((state) => {
+        const maxZIndex = state.layers.length > 0
+          ? Math.max(...state.layers.map(l => l.zIndex))
+          : 0;
+
+        const newLayer: Layer = {
+          id: `product-${image.id}-${Date.now()}`,
+          type: 'product',
+          x: 100,
+          y: 100,
+          width: 400,
+          height: 400,
+          rotation: 0,
+          src: image.url,
+          zIndex: maxZIndex + 1,
+        };
+
+        state.layers.push(newLayer);
+        state.selectedId = newLayer.id;
       }),
   }))
 );

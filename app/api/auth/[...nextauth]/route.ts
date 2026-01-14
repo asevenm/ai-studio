@@ -125,9 +125,20 @@ export const authOptions = {
             token.credits = user.credits;
             token.phone = user.phone;
         }
-        // Update credits if session is updated (e.g. after deduction)
-        if (trigger === "update" && session?.user?.credits) {
-            token.credits = session.user.credits;
+        // Update credits if session is updated (e.g. after deduction or recharge)
+        if (trigger === "update") {
+            if (session?.credits !== undefined) {
+                token.credits = session.credits;
+            } else {
+                // Fetch latest credits from database
+                const dbUser = await prisma.user.findUnique({
+                    where: { id: token.id },
+                    select: { credits: true },
+                });
+                if (dbUser) {
+                    token.credits = dbUser.credits;
+                }
+            }
         }
         return token;
     },

@@ -1,7 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Pencil, Download, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -26,6 +27,9 @@ export default function ImageSetCard({
   images,
   onDownload,
 }: ImageSetCardProps) {
+  const router = useRouter();
+  const [creating, setCreating] = useState(false);
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleString('zh-CN', {
@@ -69,6 +73,32 @@ export default function ImageSetCard({
 
   const isProcessing = status === 'processing';
 
+  const handleEnterCanvas = async () => {
+    if (creating || isProcessing) return;
+
+    setCreating(true);
+    try {
+      // Create design from image set
+      const res = await fetch(`/api/image-sets/${id}/design`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform: 'taobao' }),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || '创建设计失败');
+      }
+
+      const design = await res.json();
+      router.push(`/editor/${design.id}`);
+    } catch (error: any) {
+      console.error('Failed to create design:', error);
+      alert(error.message || '进入画布失败，请重试');
+      setCreating(false);
+    }
+  };
+
   return (
     <Card className="p-6 bg-white rounded-2xl shadow-sm hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between mb-4">
@@ -82,12 +112,20 @@ export default function ImageSetCard({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Link href={`/editor/${id}`}>
-            <Button variant="outline" size="sm" className="gap-1.5" disabled={isProcessing}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={isProcessing || creating}
+            onClick={handleEnterCanvas}
+          >
+            {creating ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
               <Pencil className="w-4 h-4" />
-              进入画布
-            </Button>
-          </Link>
+            )}
+            {creating ? '创建中...' : '进入画布'}
+          </Button>
           <Button
             variant="outline"
             size="sm"

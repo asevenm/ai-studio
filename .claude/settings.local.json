@@ -6,7 +6,14 @@
       "Bash(npx shadcn@latest add button card dialog input tabs badge avatar dropdown-menu -y)",
       "Bash(npx prisma db push:*)",
       "Bash(pnpm add:*)",
-      "Bash(pnpm build:*)"
+      "Bash(pnpm build:*)",
+      "Bash(find:*)",
+      "Bash(tree:*)",
+      "Bash(npx tsx:*)",
+      "Bash(curl:*)",
+      "Bash(npx prisma generate:*)",
+      "Bash(sqlite3:*)",
+      "Bash(npx next build:*)"
     ],
     "deny": [],
     "ask": []

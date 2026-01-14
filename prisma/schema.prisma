@@ -24,6 +24,7 @@ model User {
   projects      Project[]
   sessions      Session[]
   imageSets     ImageSet[]
+  creditTransactions CreditTransaction[]
 }
 
 model SmsCode {
@@ -63,13 +64,15 @@ model Folder {
 }
 
 model Design {
-  id        String   @id @default(cuid())
-  name      String
-  sceneJson Json
-  folderId  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  folder    Folder   @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  id         String    @id @default(cuid())
+  name       String
+  sceneJson  Json
+  folderId   String
+  imageSetId String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  folder     Folder    @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  imageSet   ImageSet? @relation(fields: [imageSetId], references: [id], onDelete: SetNull)
 }
 
 model Account {
@@ -109,19 +112,21 @@ model VerificationToken {
 // ==================== 新增模型 ====================
 
 model ImageSet {
-  id           String           @id @default(cuid())
-  name         String
-  configType   String
-  status       String           @default("pending")
-  extraPrompt  String?
-  modelId      String?
-  pointsCost   Int              @default(0)
-  userId       String
-  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  images       GeneratedImage[]
-  sourceImages SourceImage[]
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  id             String           @id @default(cuid())
+  name           String
+  configType     String
+  status         String           @default("pending")
+  extraPrompt    String?
+  analyzedPrompt String?          // Vision 分析生成的优化 Prompt
+  modelId        String?
+  pointsCost     Int              @default(0)
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  images         GeneratedImage[]
+  sourceImages   SourceImage[]
+  designs        Design[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 }
 
 model SourceImage {
@@ -162,4 +167,32 @@ model AIModel {
   pointsCost  Int
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
+}
+
+// ==================== 充值系统 ====================
+
+model CreditPackage {
+  id          String   @id @default(cuid())
+  name        String
+  credits     Int
+  price       Float
+  currency    String   @default("CNY")
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model CreditTransaction {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String   // "recharge" | "consume" | "gift" | "refund"
+  amount      Int      // 正数为增加，负数为消耗
+  balance     Int      // 交易后余额
+  description String?
+  relatedId   String?  // 关联的订单ID或消费记录ID
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
